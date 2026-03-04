@@ -1,5 +1,5 @@
 use std::{ffi::{c_double, c_float, c_int, c_long, c_schar, c_short, c_uchar, c_uint, c_ulong, c_ushort, c_void, CStr, CString}, marker::PhantomData};
-use libc::{RTLD_NOW, dlclose, dlerror, dlopen, dlsym};
+use libc::{RTLD_LAZY, RTLD_NOW, dlclose, dlerror, dlopen, dlsym};
 
 //pub unsafe trait FromDL 
 //where 
@@ -58,7 +58,7 @@ impl DynamicLibrary {
     pub fn load(path: &str) -> Result<Self, String> {
         let path = CString::new(path).unwrap();
         unsafe { dlerror(); }
-        let handle = unsafe { dlopen(path.as_ptr(), RTLD_NOW) }; 
+        let handle = unsafe { dlopen(path.as_ptr(), RTLD_LAZY) }; 
         if handle.is_null() {
             let reason = unsafe { dlerror() };
             if !reason.is_null() {
@@ -98,6 +98,20 @@ impl DynamicLibrary {
         let c_fn: CFunction<'_, Args, Ret> = CFunction::new(ptr, &self);
 
         Some(c_fn)
+    }
+
+    pub unsafe fn set_symbol_fn<Args, Ret>(&self, symbol: &str, new: extern "C" fn(Args) -> Ret) -> Result<(), String> {
+        let ptr = unsafe { dlsym(self.handle, CString::new(symbol).unwrap().as_ptr()) };
+        let ptr = ptr as *mut extern "C" fn(Args) -> Ret;
+
+        if ptr.is_null() {
+            return Err("Null pointer".to_string());
+        }
+
+        unsafe { *ptr = new };
+        
+        Ok(())
+
     }
 }
 
